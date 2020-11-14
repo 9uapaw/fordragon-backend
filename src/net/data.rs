@@ -1,9 +1,14 @@
-pub struct RawInternalData {
+use crate::net::protocol::opcode::NetworkRecvOpCode;
 
+pub enum RawInternalData {
+    AUTH { user: String, hash: String },
+    FLAG { op_code: NetworkRecvOpCode },
 }
 
-impl RawInternalData {
-    pub fn new() -> Self {
-        RawInternalData {}
+impl Default for RawInternalData {
+    fn default() -> Self {
+        RawInternalData::FLAG {
+            op_code: NetworkRecvOpCode::UNKNOWN,
+        }
     }
 }

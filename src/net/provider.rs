@@ -1,24 +1,29 @@
 use crate::error::error::Error;
 use crate::net::data::RawInternalData;
-use tokio::sync::mpsc;
 use std::future::Future;
+use tokio::sync::mpsc;
+
+type Rec = mpsc::Receiver<Result<RawInternalData, Error>>;
+type InternalMsg = Result<RawInternalData, Error>;
 
 pub trait DataProvider {
     fn spawn_reader(&mut self) -> Result<DataStream, Error>;
 }
 
 pub struct DataStream {
-    receiver: mpsc::Receiver<RawInternalData>,
+    receiver: Rec,
 }
 
 impl DataStream {
-    pub fn new(receiver: mpsc::Receiver<RawInternalData>) -> Self {
+    pub fn new(receiver: Rec) -> Self {
         DataStream { receiver }
     }
 }
 
 impl DataStream {
-    pub async fn recv(&mut self) -> impl Future<Output = Option<RawInternalData>> + '_ {
+    pub async fn recv(
+        &mut self,
+    ) -> impl Future<Output = Option<InternalMsg>> + '_ {
         self.receiver.recv()
     }
 }
