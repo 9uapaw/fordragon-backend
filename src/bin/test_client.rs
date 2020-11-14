@@ -1,5 +1,5 @@
 use tokio::prelude::*;
-use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use fordragon_backend::user::session::DefaultSessionManager;
 use std::net::SocketAddr;
 
@@ -9,7 +9,7 @@ const PORT: &str = "47331";
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("{}:{}", LOCALHOST, PORT).parse::<SocketAddr>()?;
-
+    let stream = TcpStream::connect(&addr).await?;
 
     Ok(())
 }

@@ -1,5 +1,9 @@
 use bytes::Bytes;
 
+pub trait BBEncodable {
+
+}
+
 // A BombShell Protocol compliant encoder, that
 pub struct ByteEncoder {}
 

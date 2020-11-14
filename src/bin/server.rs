@@ -1,5 +1,7 @@
+use env_logger::Env;
 use fordragon_backend::net::connection::DataStreamConnection;
 use fordragon_backend::user::session::DefaultSessionManager;
+use log::{info, warn};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -10,18 +12,26 @@ const PORT: &str = "47331";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let env = Env::default().filter_or("BB_LOG_LEVEL", "debug");
+    env_logger::init_from_env(env);
+
     let addr = format!("{}:{}", LOCALHOST, PORT).parse::<SocketAddr>()?;
     let client = TcpListener::bind(&addr).await?;
+    info!("Started server on {}:{}", LOCALHOST, PORT);
+
     let session_manager = Arc::new(Mutex::new(DefaultSessionManager::new()));
 
     loop {
         let (mut socket, addr) = client.accept().await?;
-        let manager = session_manager.clone();
+        info!("Accepted connection from {}", addr);
 
+        let manager = session_manager.clone();
         tokio::spawn(async move {
             let mut connection = DataStreamConnection::new(Some(socket), addr);
             let auth_res = connection.authenticate(manager).await;
-            println!("Auth is {}", auth_res.is_ok());
+            if auth_res.is_err() {
+                warn!("Authentication failed");
+            }
         });
     }
 
