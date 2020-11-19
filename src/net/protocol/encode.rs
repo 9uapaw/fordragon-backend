@@ -1,7 +1,7 @@
 use bytes::Bytes;
 
 pub trait BBEncodable {
-
+    fn encode_as_bbp(&self) -> Bytes;
 }
 
 // A BombShell Protocol compliant encoder, that

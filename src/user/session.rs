@@ -16,10 +16,9 @@ impl DefaultSessionManager {
         let mut temp_storage = HashMap::new();
         let mut temp_hash = sha2::Sha256::new();
         temp_hash.update(&format!("admin:admin:{}", TEMP_SECRET).as_bytes());
-        temp_storage.insert("admin", format!("{:x}", &temp_hash.finalize()));
-        println!("{}", temp_storage.get("admin").unwrap());
+        temp_storage.insert("admin".to_string(), format!("{:x}", &temp_hash.finalize()));
         DefaultSessionManager {
-            temp_storage: HashMap::new(),
+            temp_storage,
         }
     }
 }
@@ -27,6 +26,7 @@ impl DefaultSessionManager {
 impl UserSessionManager for DefaultSessionManager {
     fn is_auth_registered(&self, user: &str, auth: &str) -> bool {
         if let Some(hash) = self.temp_storage.get(user) {
+            debug!("Stored hash {} ?= {}", hash, auth);
             hash == auth
         } else {
             false

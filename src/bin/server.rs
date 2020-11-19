@@ -1,7 +1,7 @@
 use env_logger::Env;
 use fordragon_backend::net::connection::DataStreamConnection;
 use fordragon_backend::user::session::DefaultSessionManager;
-use log::{info, warn};
+use log::{error, info, warn};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -27,13 +27,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let manager = session_manager.clone();
         tokio::spawn(async move {
-            let mut connection = DataStreamConnection::new(Some(socket), addr);
+            let mut connection = DataStreamConnection::new(Some(socket), addr.clone());
             let auth_res = connection.authenticate(manager).await;
-            if auth_res.is_err() {
-                warn!("Authentication failed");
+            if let Err(e) = auth_res {
+                error!("{}", e.to_string());
+                warn!("Authentication failed for {}", addr);
+            } else {
+                info!("Authenticated {}", addr);
             }
         });
     }
+
 
     Ok(())
 }

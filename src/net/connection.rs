@@ -47,10 +47,17 @@ impl DataStreamConnection {
         session_manager: SafeManager<T>,
     ) -> Result<(), Error> {
         if let Some(mut socket) = self.socket.take() {
-            let mut buf = BytesMut::with_capacity(BUFFER_LIMIT);
-            let first = socket.read(buf.as_mut()).await;
+            let mut buf = [0 as u8; BUFFER_LIMIT];
+            let mut buf = BytesMut::from(buf.as_ref());
+            let first = socket
+                .read(buf.as_mut())
+                .await
+                .map_err(|e| Error::new_network(&e.to_string()))?;
+            debug!("Authentication bytes: #{} {:?}", first, buf);
+
             let converter = ByteToRawDecoder::new();
             let auth = converter.convert(&buf);
+            debug!("Converted {:?}", auth);
 
             match auth {
                 Ok(auth) => match auth {
@@ -59,21 +66,24 @@ impl DataStreamConnection {
                         if !manager.is_ok() {
                             return Err(AuthError::invalid_user_or_password());
                         }
-                        if session_manager
-                            .lock()
-                            .unwrap()
+                        return if manager.unwrap()
                             .is_auth_registered(user.as_str(), hash.as_str())
                         {
                             self.authentication.replace(hash.clone());
+                            debug!("Successfully authenticated {}", user);
+                            Ok(())
                         } else {
-                            return Err(Error::new_network("Authentication failed"));
+                            debug!("Unable to authenticate via user session manager");
+                            Err(Error::new_network("Authentication failed"))
                         }
                     }
                     _ => {
+                        debug!("Packet is not AUTH");
                         return Err(Error::NetworkError("Authentication failed".to_string()));
                     }
                 },
-                _ => {
+                Err(e) => {
+                    debug!("{}", e.to_string());
                     return Err(Error::NetworkError("Authentication failed".to_string()));
                 }
             };
