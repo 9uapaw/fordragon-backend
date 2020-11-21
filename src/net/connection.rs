@@ -130,4 +130,6 @@ impl DataStreamConnection {
 
         Ok(DataStream::new(rx))
     }
+
+    pub async fn spawn_send(&mut self) -> Result<>
 }
