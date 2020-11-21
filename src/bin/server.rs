@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let manager = session_manager.clone();
         tokio::spawn(async move {
-            let mut connection = DataStreamConnection::new(Some(socket), addr.clone());
+            let mut connection = DataStreamConnection::new(socket, addr.clone());
             let auth_res = connection.authenticate(manager).await;
             if let Err(e) = auth_res {
                 error!("{}", e.to_string());

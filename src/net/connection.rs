@@ -2,13 +2,14 @@ use crate::error::error::{AuthError, Error};
 use crate::net::data::RawInternalData;
 use crate::net::protocol::decode::ByteToRawDecoder;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
-use crate::net::provider::{DataProvider, DataStream};
+use crate::net::provider::{DataStreamReader, DataStreamWriter};
 use crate::user::session::UserSessionManager;
-use bytes::BytesMut;
+use bytes::{BytesMut, Bytes};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::process::Output;
 use std::sync::{Arc, Mutex};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::sync::mpsc;
@@ -20,14 +21,18 @@ type SafeManager<T> = Arc<Mutex<T>>;
 /// Represents an open connection to a client
 pub struct DataStreamConnection {
     socket: Option<TcpStream>,
+    reader: Option<OwnedReadHalf>,
+    writer: Option<OwnedWriteHalf>,
     address: SocketAddr,
     authentication: Option<String>,
 }
 
 impl DataStreamConnection {
-    pub fn new(socket: Option<TcpStream>, address: SocketAddr) -> Self {
+    pub fn new(socket: TcpStream, address: SocketAddr) -> Self {
         DataStreamConnection {
-            socket,
+            socket: Some(socket),
+            reader: None,
+            writer: None,
             address,
             authentication: None,
         }
@@ -66,7 +71,8 @@ impl DataStreamConnection {
                         if !manager.is_ok() {
                             return Err(AuthError::invalid_user_or_password());
                         }
-                        return if manager.unwrap()
+                        return if manager
+                            .unwrap()
                             .is_auth_registered(user.as_str(), hash.as_str())
                         {
                             self.authentication.replace(hash.clone());
@@ -75,7 +81,7 @@ impl DataStreamConnection {
                         } else {
                             debug!("Unable to authenticate via user session manager");
                             Err(Error::new_network("Authentication failed"))
-                        }
+                        };
                     }
                     _ => {
                         debug!("Packet is not AUTH");
@@ -87,6 +93,9 @@ impl DataStreamConnection {
                     return Err(Error::NetworkError("Authentication failed".to_string()));
                 }
             };
+            let (reader, writer) = socket.into_split();
+            self.writer = Some(writer);
+            self.reader = Some(reader);
         } else {
             return Err(Error::new_network("No session is stored"));
         }
@@ -99,14 +108,14 @@ impl DataStreamConnection {
     ///
     /// # Returns
     /// A stream, which wraps the receiving part of a channel in an asynchronous fashion.
-    pub async fn spawn_reader(&mut self) -> Result<DataStream, Error> {
+    pub async fn spawn_reader(&mut self) -> Result<DataStreamReader, Error> {
         let (tx, mut rx) = mpsc::channel(100);
 
         if self.authentication.is_none() {
             return Err(Error::new_network("Client is not authenticated"));
         }
 
-        if let Some(mut socket) = self.socket.take() {
+        if let Some(mut socket) = self.reader.take() {
             tokio::spawn(async move {
                 let converter = ByteToRawDecoder::new();
 
@@ -128,8 +137,40 @@ impl DataStreamConnection {
             return Err(Error::NetworkError("No session is stored".to_string()));
         }
 
-        Ok(DataStream::new(rx))
+        Ok(DataStreamReader::new(rx))
     }
 
-    pub async fn spawn_send(&mut self) -> Result<>
+    /// Spawns an asynchronous thread that is reading a channel and transmits the received
+    /// data to the writing part of the socket.
+    ///
+    /// # Returns
+    /// A stream, which wraps the sender part of a channel in an asynchronous fashion.
+    pub async fn spawn_writer(&mut self) -> Result<DataStreamWriter, Error> {
+        let (tx, mut rx):  (mpsc::Sender<Bytes>,  mpsc::Receiver<Bytes>) = mpsc::channel(100);
+        let mut bytes: Bytes = Bytes::new();
+
+        if self.authentication.is_none() {
+            return Err(Error::new_network("Client is not authenticated"));
+        }
+
+        if let Some(mut writer) = self.writer.take() {
+            tokio::spawn(async move {
+                let converter = ByteToRawDecoder::new();
+
+                loop {
+                    match rx.recv().await {
+                        Some(bytes) => {let write_res = writer.write_all(bytes.as_ref()).await;
+                            if let Err(e) = write_res {
+                                error!("{}", e.to_string());
+                            }
+                        },
+                        None => ()
+                    };
+                }
+            })
+                .await;
+        }
+
+        Ok(DataStreamWriter::new(tx))
+    }
 }
