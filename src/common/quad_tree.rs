@@ -3,8 +3,8 @@
 use crate::game::location::pos::{Area, Position, Positionable};
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::slice::{Iter, IterMut};
 use std::sync::atomic::AtomicPtr;
-use std::slice::{IterMut, Iter};
 
 #[derive(Debug)]
 pub struct QuadNode<T>
@@ -170,6 +170,25 @@ where
         }
     }
 
+    pub fn remove(&mut self, k: &str) {
+        let mut removed = false;
+        if let Some(n) = self.find_node_of_value(k) {
+            n.values.remove(k);
+            removed = true;
+        }
+        if removed {
+            self.object_node_map.remove(k);
+        }
+    }
+
+    pub fn find_node_of_value(&mut self, k: &str) -> Option<&mut QuadNode<T>> {
+        if let Some(node_index) = self.object_node_map.get(k) {
+            self.arena.get_mut(*node_index)
+        } else {
+            None
+        }
+    }
+
     pub fn iter_mut(&mut self) -> IterMut<QuadNode<T>> {
         self.arena.iter_mut()
     }
@@ -328,23 +347,23 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_remove_element() {
-    //     let mut tree: QuadTree<TestPosition> = QuadTree::new(
-    //         Position::from_coord(0 as f64, 0 as f64),
-    //         Position::from_coord(1000 as f64, 1000 as f64),
-    //         5,
-    //         4,
-    //     );
-    //     tree.add("1".to_string(), TestPosition { x: 0.0, y: 0.0 });
-    //     tree.add("2".to_string(), TestPosition { x: 500.0, y: 500.0 });
-    //     tree.add("3".to_string(), TestPosition { x: 700.0, y: 300.0 });
-    //
-    //     tree.remove("3".to_string());
-    //
-    //     let mut element = tree.find("3".to_string());
-    //     if let Some(e) = element {
-    //         panic!("Element is found, but it was removed before");
-    //     }
-    // }
+    #[test]
+    fn test_remove_element() {
+        let mut tree: QuadTree<TestPosition> = QuadTree::new(
+            Position::from_coord(0 as f64, 0 as f64),
+            Position::from_coord(1000 as f64, 1000 as f64),
+            5,
+            4,
+        );
+        tree.add("1".to_string(), TestPosition { x: 0.0, y: 0.0 });
+        tree.add("2".to_string(), TestPosition { x: 500.0, y: 500.0 });
+        tree.add("3".to_string(), TestPosition { x: 700.0, y: 300.0 });
+
+        tree.remove("3");
+
+        let mut element = tree.find("3".to_string());
+        if let Some(e) = element {
+            panic!("Element is found, but it was removed before");
+        }
+    }
 }
