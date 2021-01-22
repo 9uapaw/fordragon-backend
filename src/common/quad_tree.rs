@@ -4,6 +4,7 @@ use crate::game::location::pos::{Area, Position, Positionable};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicPtr;
+use std::slice::{IterMut, Iter};
 
 #[derive(Debug)]
 pub struct QuadNode<T>
@@ -11,22 +12,72 @@ where
     T: Positionable,
 {
     area: Area,
-    children: Vec<Box<QuadNode<T>>>,
+    children: Vec<usize>,
     values: HashMap<String, T>,
     depth: usize,
+    index: usize,
+    tree: AtomicPtr<QuadTree<T>>,
 }
 
 impl<T> QuadNode<T>
 where
     T: Positionable,
 {
-    pub fn new(min: Position, max: Position, depth: usize) -> Self {
+    pub fn new(
+        min: Position,
+        max: Position,
+        depth: usize,
+        index: usize,
+        tree: *mut QuadTree<T>,
+    ) -> Self {
         QuadNode {
             area: Area::from_point((min.x(), min.y()), (max.x(), max.y())),
             children: Vec::new(),
             values: HashMap::new(),
             depth,
+            index,
+            tree: AtomicPtr::new(tree),
         }
+    }
+
+    #[inline]
+    pub fn third_quadrant(&mut self) -> Option<&mut QuadNode<T>> {
+        let index = self.children.get(0);
+        if let Some(i) = index {
+            return unsafe { (*(*self.tree.get_mut())).arena.get_mut(*i) };
+        }
+
+        None
+    }
+
+    #[inline]
+    pub fn second_quadrant(&mut self) -> Option<&mut QuadNode<T>> {
+        let index = self.children.get(1);
+        if let Some(i) = index {
+            return unsafe { (*(*self.tree.get_mut())).arena.get_mut(*i) };
+        }
+
+        None
+    }
+
+    #[inline]
+    pub fn first_quadrant(&mut self) -> Option<&mut QuadNode<T>> {
+        let index = self.children.get(2);
+        if let Some(i) = index {
+            return unsafe { (*(*self.tree.get_mut())).arena.get_mut(*i) };
+        }
+
+        None
+    }
+
+    #[inline]
+    pub fn fourth_quadrant(&mut self) -> Option<&mut QuadNode<T>> {
+        let index = self.children.get(3);
+        if let Some(i) = index {
+            return unsafe { (*(*self.tree.get_mut())).arena.get_mut(*i) };
+        }
+
+        None
     }
 
     pub fn add_value(&mut self, k: String, v: T) {
@@ -35,26 +86,6 @@ where
         }
 
         self.values.insert(k, v);
-    }
-
-    pub fn get_node_candidate(&mut self, compare: &T) -> Option<&mut QuadNode<T>> {
-        if !self.area.contains(compare.position()) {
-            return None;
-        }
-
-        let mut res = None;
-        if self.children.is_empty() {
-            res = Some(self);
-        } else {
-            for node in self.children.iter_mut() {
-                let mut inner_res = node.get_node_candidate(compare);
-                if inner_res.is_some() {
-                    res = inner_res;
-                }
-            }
-        }
-
-        res
     }
 
     pub fn get_value(&mut self, k: String) -> Option<&mut T> {
@@ -75,10 +106,11 @@ pub struct QuadTree<T>
 where
     T: Positionable,
 {
-    root: Box<QuadNode<T>>,
+    arena: Vec<QuadNode<T>>,
+    root: usize,
     bucket_size: usize,
     max_depth: usize,
-    object_node_map: HashMap<String, AtomicPtr<QuadNode<T>>>,
+    object_node_map: HashMap<String, usize>,
 }
 
 impl<T> QuadTree<T>
@@ -86,23 +118,27 @@ where
     T: Positionable,
 {
     pub fn new(min: Position, max: Position, bucket_size: usize, max_depth: usize) -> Self {
-        QuadTree {
-            root: Box::new(QuadNode::new(min, max, 0)),
+        let mut tree = QuadTree {
+            arena: Vec::new(),
+            root: 0,
             bucket_size,
             max_depth,
             object_node_map: HashMap::new(),
-        }
+        };
+        let mut tree_ptr = &mut tree as *mut QuadTree<T>;
+        tree.arena.push(QuadNode::new(min, max, 0, 0, tree_ptr));
+        tree
     }
 
     pub fn get_root(&mut self) -> &mut QuadNode<T> {
-        &mut self.root
+        self.arena.get_mut(self.root).unwrap()
     }
 
     pub fn find(&mut self, k: String) -> Option<&mut T> {
-        let mut ptr = self.object_node_map.get_mut(&k);
-        if let Some(ref mut ptr) = ptr {
-            unsafe {
-                return (*(*ptr.get_mut())).values.get_mut(&k);
+        let node_id = self.object_node_map.get(&k);
+        if let Some(n) = node_id {
+            if let Some(node) = self.arena.get_mut(*n) {
+                return node.get_value(k.clone());
             }
         }
 
@@ -110,80 +146,110 @@ where
     }
 
     pub fn add(&mut self, k: String, v: T) {
-        if let Some(ref mut node) = self.root.get_node_candidate(&v) {
-            if node.values.len() >= self.bucket_size && node.depth != self.max_depth {
-                <QuadTree<T>>::split_node(*node);
-
-                let mut values: HashMap<String, T> = node.values.drain().collect();
-                let keys = values.keys().cloned().collect::<Vec<String>>();
-                for key in keys {
-                    let mut val = values.remove(&key).unwrap();
-                    let pos = val.position();
-                    let mut found_child = node
-                        .children
-                        .iter_mut()
-                        .filter(|c| c.get_area().contains(pos.clone()))
-                        .next();
-                    if let Some(child) = found_child {
-                        self.object_node_map
-                            .insert(key.clone(), AtomicPtr::new(child.as_mut()));
-                        child.add_value(key.clone(), val);
+        let mut node_candidate_index = self.root;
+        loop {
+            let node_candidate = self.arena.get(node_candidate_index).unwrap();
+            if node_candidate.is_leaf() {
+                break;
+            }
+            for child_index in &node_candidate.children {
+                let mut child = self.arena.get(*child_index);
+                if let Some(child) = child {
+                    if child.get_area().contains(v.position()) {
+                        node_candidate_index = *child_index;
                     }
                 }
-                let candidate = node.get_node_candidate(&v);
-                let node_ptr: Option<*mut QuadNode<T>> = candidate.map(|n| {
-                    n.add_value(k.clone(), v);
-                    n as *mut QuadNode<T>
-                });
-                if let Some(ptr) = node_ptr {
-                    self.object_node_map.insert(k.clone(), AtomicPtr::new(ptr));
+            }
+        }
+
+        let candidate_id = self.try_split(node_candidate_index, &v);
+        let mut node_candidate = self.arena.get_mut(candidate_id);
+        if let Some(node) = node_candidate {
+            node.add_value(k.clone(), v);
+            self.object_node_map.insert(k, candidate_id);
+        }
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<QuadNode<T>> {
+        self.arena.iter_mut()
+    }
+
+    pub fn iter(&self) -> Iter<QuadNode<T>> {
+        self.arena.iter()
+    }
+
+    fn try_split(&mut self, node_id: usize, v: &T) -> usize {
+        let mut new_children = Vec::new();
+        let current_max_node_id = self.arena.len() - 1;
+        let mut selected_node_id = node_id;
+        let mut values: HashMap<String, T> = HashMap::new();
+        let mut tree_ptr = self as *mut QuadTree<T>;
+        let mut node = self.arena.get_mut(node_id);
+        if let Some(node) = node {
+            if node.values.len() >= self.bucket_size && node.depth < self.max_depth {
+                let min_x = node.area.min().x();
+                let min_y = node.area.min().y();
+                let max_x = node.area.max().x();
+                let max_y = node.area.max().y();
+
+                let avg_x = ((node.area.min().x() + node.area.max().x()) / 2 as f64).floor();
+                let avg_y = ((node.area.min().y() + node.area.max().y()) / 2 as f64).floor();
+                values.extend(node.values.drain());
+
+                new_children.push(QuadNode::new(
+                    Position::from_coord(min_x, min_y),
+                    Position::from_coord(avg_x, avg_y),
+                    node.depth + 1,
+                    current_max_node_id + 1,
+                    tree_ptr.clone(),
+                ));
+                new_children.push(QuadNode::new(
+                    Position::from_coord(min_x, avg_y),
+                    Position::from_coord(avg_x, max_y),
+                    node.depth + 1,
+                    current_max_node_id + 2,
+                    tree_ptr.clone(),
+                ));
+                new_children.push(QuadNode::new(
+                    Position::from_coord(avg_x, avg_y),
+                    Position::from_coord(max_x, max_y),
+                    node.depth + 1,
+                    current_max_node_id + 3,
+                    tree_ptr.clone(),
+                ));
+                new_children.push(QuadNode::new(
+                    Position::from_coord(avg_x, min_y),
+                    Position::from_coord(max_x, avg_y),
+                    node.depth + 1,
+                    current_max_node_id + 4,
+                    tree_ptr.clone(),
+                ));
+                node.children
+                    .extend(current_max_node_id + 1..=current_max_node_id + 4);
+            }
+        }
+        let keys: Vec<String> = values.keys().map(|k| k.clone()).collect();
+        for child in &mut new_children {
+            if child.get_area().contains(v.position()) {
+                selected_node_id = child.index;
+            }
+            for object_id in &keys {
+                let value = values.get(object_id);
+                let mut found = false;
+                if let Some(v) = value {
+                    if child.get_area().contains(v.position()) {
+                        found = true;
+                    }
                 }
-            } else {
-                node.add_value(k.clone(), v);
-                self.object_node_map
-                    .insert(k.clone(), AtomicPtr::new(*node));
+                drop(value);
+                if found {
+                    child.add_value(object_id.clone(), values.remove(object_id).unwrap());
+                    self.object_node_map.insert(object_id.clone(), child.index);
+                }
             }
         }
-    }
-
-    pub fn remove(&mut self, k: String) {
-        let mut node = self.object_node_map.remove(&k);
-        if let Some(ref mut n) = node {
-            unsafe {
-                (*(*n.get_mut())).values.remove(&k);
-            }
-        }
-    }
-
-    fn split_node(node: &mut QuadNode<T>) {
-        let min_x = node.area.min().x();
-        let min_y = node.area.min().y();
-        let max_x = node.area.max().x();
-        let max_y = node.area.max().y();
-
-        let avg_x = ((node.area.min().x() + node.area.max().x()) / 2 as f64).floor();
-        let avg_y = ((node.area.min().y() + node.area.max().y()) / 2 as f64).floor();
-
-        node.children.push(Box::new(QuadNode::new(
-            Position::from_coord(min_x, min_y),
-            Position::from_coord(avg_x, avg_y),
-            node.depth + 1,
-        )));
-        node.children.push(Box::new(QuadNode::new(
-            Position::from_coord(min_x, avg_y),
-            Position::from_coord(avg_x, max_y),
-            node.depth + 1,
-        )));
-        node.children.push(Box::new(QuadNode::new(
-            Position::from_coord(avg_x, avg_y),
-            Position::from_coord(max_x, max_y),
-            node.depth + 1,
-        )));
-        node.children.push(Box::new(QuadNode::new(
-            Position::from_coord(avg_x, min_y),
-            Position::from_coord(max_x, avg_y),
-            node.depth + 1,
-        )));
+        self.arena.extend(new_children);
+        selected_node_id
     }
 }
 
@@ -225,14 +291,20 @@ mod tests {
 
         let mut root = tree.get_root();
         assert!(!root.is_leaf());
-        let mut third = root.children.get(0);
-        let mut second = root.children.get(1);
-        let mut first = root.children.get(2);
-        let mut fourth = root.children.get(3);
-        assert_eq!(third.unwrap().values.len(), 1);
-        assert_eq!(second.unwrap().values.len(), 2);
-        assert_eq!(first.unwrap().values.len(), 2);
-        assert_eq!(fourth.unwrap().values.len(), 1);
+        {
+            let mut third = root.third_quadrant().unwrap();
+            assert_eq!(third.values.len(), 1);
+        }
+        {
+            let mut second = root.second_quadrant().unwrap();
+            assert_eq!(second.values.len(), 2);
+        }
+        {
+            let mut first = root.first_quadrant().unwrap();
+            assert_eq!(first.values.len(), 2);
+        }
+        let mut fourth = root.fourth_quadrant().unwrap();
+        assert_eq!(fourth.values.len(), 1);
     }
 
     #[test]
@@ -256,23 +328,23 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_remove_element() {
-        let mut tree: QuadTree<TestPosition> = QuadTree::new(
-            Position::from_coord(0 as f64, 0 as f64),
-            Position::from_coord(1000 as f64, 1000 as f64),
-            5,
-            4,
-        );
-        tree.add("1".to_string(), TestPosition { x: 0.0, y: 0.0 });
-        tree.add("2".to_string(), TestPosition { x: 500.0, y: 500.0 });
-        tree.add("3".to_string(), TestPosition { x: 700.0, y: 300.0 });
-
-        tree.remove("3".to_string());
-
-        let mut element = tree.find("3".to_string());
-        if let Some(e) = element {
-            panic!("Element is found, but it was removed before");
-        }
-    }
+    // #[test]
+    // fn test_remove_element() {
+    //     let mut tree: QuadTree<TestPosition> = QuadTree::new(
+    //         Position::from_coord(0 as f64, 0 as f64),
+    //         Position::from_coord(1000 as f64, 1000 as f64),
+    //         5,
+    //         4,
+    //     );
+    //     tree.add("1".to_string(), TestPosition { x: 0.0, y: 0.0 });
+    //     tree.add("2".to_string(), TestPosition { x: 500.0, y: 500.0 });
+    //     tree.add("3".to_string(), TestPosition { x: 700.0, y: 300.0 });
+    //
+    //     tree.remove("3".to_string());
+    //
+    //     let mut element = tree.find("3".to_string());
+    //     if let Some(e) = element {
+    //         panic!("Element is found, but it was removed before");
+    //     }
+    // }
 }
