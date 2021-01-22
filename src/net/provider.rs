@@ -1,13 +1,13 @@
 use crate::error::error::Error;
-use crate::net::data::RawInternalData;
+use crate::net::data::IntermediateGameData;
 use bytes::Bytes;
 use std::future::Future;
 use tokio::sync::mpsc;
 use crate::net::protocol::encode::BBEncodable;
 
-type Rec = mpsc::Receiver<Result<RawInternalData, Error>>;
-type Send = mpsc::Sender<Bytes>;
-type InternalMsg = Result<RawInternalData, Error>;
+type Rec = mpsc::Receiver<Bytes>;
+type Send = mpsc::UnboundedSender<Bytes>;
+type InternalMsg = Bytes;
 
 pub struct DataStreamReader {
     receiver: Rec,
@@ -20,7 +20,7 @@ impl DataStreamReader {
 }
 
 impl DataStreamReader {
-    pub async fn recv(&mut self) -> impl Future<Output = Option<InternalMsg>> + '_ {
+    pub fn recv(&mut self) -> impl Future<Output = Option<InternalMsg>> + '_ {
         self.receiver.recv()
     }
 }
@@ -36,10 +36,10 @@ impl DataStreamWriter {
 }
 
 impl DataStreamWriter {
-    pub async fn send<T>(
+    pub fn send(
         &mut self,
-        data: T,
-    ) -> impl Future<Output = Result<(), mpsc::error::SendError<Bytes>>> + '_  where T: BBEncodable{
-        self.sender.send(data.encode_as_bbp())
+        data: Bytes,
+    ) -> Result<(), mpsc::error::SendError<Bytes>> {
+        self.sender.send(data)
     }
 }

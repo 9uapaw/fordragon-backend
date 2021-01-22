@@ -1,6 +1,6 @@
 use crate::error::error::Error;
 use crate::net::protocol::cursor::ByteCursor;
-use crate::net::data::RawInternalData;
+use crate::net::data::IntermediateGameData;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 use bytes::BytesMut;
 use std::convert::TryFrom;
@@ -18,9 +18,9 @@ impl ByteToRawDecoder {
     ///
     /// The bytes are interpreted in a little endian fashion as the following:
     /// 0-2 bytes: NetworkOpCode (u16)
-    pub fn convert(&self, buf: &BytesMut) -> Result<RawInternalData, Error> {
+    pub fn convert(&self, buf: &BytesMut) -> Result<IntermediateGameData, Error> {
         let mut cursor = ByteCursor::new(buf);
-        let mut data = RawInternalData::default();
+        let mut data = IntermediateGameData::default();
 
         let op_code = match cursor.as_u16() {
             Some(op) => Some(
@@ -42,7 +42,7 @@ impl ByteToRawDecoder {
         &self,
         cursor: &mut ByteCursor,
         op_code: &NetworkRecvOpCode,
-    ) -> Result<RawInternalData, Error> {
+    ) -> Result<IntermediateGameData, Error> {
         match op_code {
             NetworkRecvOpCode::AUTH => {
                 let user = cursor
@@ -51,7 +51,7 @@ impl ByteToRawDecoder {
                 let hash = cursor
                     .as_utf8()
                     .ok_or(Error::new_network("Invalid or missing hash from AUTH"))?;
-                Ok(RawInternalData::AUTH { user, hash })
+                Ok(IntermediateGameData::Auth { user, hash })
             }
             _ => Err(Error::new_network("Invalid OpCode")),
         }
@@ -62,7 +62,7 @@ impl ByteToRawDecoder {
 mod tests {
     use crate::net::protocol::decode::ByteToRawDecoder;
     use crate::net::protocol::cursor::ByteCursor;
-    use crate::net::data::RawInternalData;
+    use crate::net::data::IntermediateGameData;
     use crate::net::protocol::opcode::NetworkRecvOpCode;
     use bytes::{BytesMut, Buf};
     use crate::net::protocol::encode::ByteEncoder;
@@ -70,19 +70,17 @@ mod tests {
     #[test]
     fn test_auth() {
         let converter = ByteToRawDecoder::new();
-        let encoder = ByteEncoder::new();
+        let mut bytes = BytesMut::new();
+        let mut encoder = ByteEncoder::new(&mut bytes);
+        encoder.encode(&NetworkRecvOpCode::AUTH);
+        encoder.encode_str("test_user");
+        encoder.encode_str("hash12345");
 
-        let mut vec_bytes = Vec::new();
-        vec_bytes.extend_from_slice(&(NetworkRecvOpCode::AUTH as u16).to_le_bytes());
-        vec_bytes.extend_from_slice(encoder.encode_str("test_user").bytes());
-        vec_bytes.extend_from_slice(encoder.encode_str("hash12345").bytes());
-
-        let mut bytes = BytesMut::from(vec_bytes.as_slice());
         let raw = converter.convert(&bytes);
 
         if let Ok(raw) = raw {
             match raw {
-                RawInternalData::AUTH { user, hash } => {
+                IntermediateGameData::Auth { user, hash } => {
                     assert_eq!(user, "test_user");
                     assert_eq!(hash, "hash12345");
                 },

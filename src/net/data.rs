@@ -1,14 +1,15 @@
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 
+/// The intermediate representation of a BBP message.
 #[derive(Debug)]
-pub enum RawInternalData {
-    AUTH { user: String, hash: String },
-    FLAG { op_code: NetworkRecvOpCode },
+pub enum IntermediateGameData {
+    Auth { user: String, hash: String },
+    Flag { op_code: NetworkRecvOpCode },
 }
 
-impl Default for RawInternalData {
+impl Default for IntermediateGameData {
     fn default() -> Self {
-        RawInternalData::FLAG {
+        IntermediateGameData::Flag {
             op_code: NetworkRecvOpCode::UNKNOWN,
         }
     }

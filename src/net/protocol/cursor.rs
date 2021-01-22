@@ -17,6 +17,22 @@ impl<'a> ByteCursor<'a> {
         }
     }
 
+    /// Converts a byte to an u8 value.
+    ///
+    /// # Returns
+    /// None if the conversion is unsuccessful due to missing bytes in the array.
+    pub fn as_u8(&mut self) -> Option<u8> {
+        let a = self.buf.next();
+
+        match a {
+            Some(a) => {
+                self.current += 1;
+                Some(u8::from_le_bytes([*a]))
+            }
+            _ => None,
+        }
+    }
+
     /// Converts two bytes to an u16 value in a little endian fashion.
     ///
     /// # Returns
@@ -78,7 +94,7 @@ mod tests {
     use crate::net::protocol::cursor::{ByteCursor};
     use bytes::BytesMut;
     use crate::net::protocol::opcode::NetworkRecvOpCode;
-    use crate::net::data::RawInternalData;
+    use crate::net::data::IntermediateGameData;
 
     #[test]
     fn test_u16() {

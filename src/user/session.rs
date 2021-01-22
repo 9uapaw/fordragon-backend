@@ -14,9 +14,7 @@ pub struct DefaultSessionManager {
 impl DefaultSessionManager {
     pub fn new() -> Self {
         let mut temp_storage = HashMap::new();
-        let mut temp_hash = sha2::Sha256::new();
-        temp_hash.update(&format!("admin:admin:{}", TEMP_SECRET).as_bytes());
-        temp_storage.insert("admin".to_string(), format!("{:x}", &temp_hash.finalize()));
+        temp_storage.insert("admin".to_string(), format!("admin:admin:{}", TEMP_SECRET));
         DefaultSessionManager {
             temp_storage,
         }
