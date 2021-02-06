@@ -5,6 +5,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::slice::{Iter, IterMut};
 use std::sync::atomic::AtomicPtr;
+use crate::game::object::obj::GameObject;
 
 #[derive(Debug)]
 pub struct QuadNode<T>
@@ -98,6 +99,10 @@ where
 
     pub fn is_leaf(&self) -> bool {
         self.children.is_empty()
+    }
+
+    pub fn get_values(&mut self) -> &mut HashMap<String, T> {
+        &mut self.values
     }
 }
 

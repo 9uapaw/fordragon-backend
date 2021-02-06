@@ -25,7 +25,7 @@ impl Lobby {
         }).await;
     }
 
-    pub async fn enter_user(&mut self, user: AuthenticatedUser) {
+    pub fn enter_user(&mut self, user: AuthenticatedUser) {
         info!("User {} entered world", &user);
 
     }

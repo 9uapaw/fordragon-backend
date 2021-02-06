@@ -1,2 +1,3 @@
-pub mod character;
+pub mod pc;
 pub mod obj;
+pub mod npc;
