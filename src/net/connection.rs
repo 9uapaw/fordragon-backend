@@ -12,7 +12,8 @@ use std::sync::{Arc, Mutex};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio::sync::mpsc;
+use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
 
 const BUFFER_LIMIT: usize = 1400;
 
@@ -113,7 +114,7 @@ impl DataStreamConnection {
     /// # Returns
     /// A stream, which wraps the receiving part of a channel in an asynchronous fashion.
     pub async fn spawn_reader(&mut self) -> Result<DataStreamReader, Error> {
-        let (tx, mut rx) = mpsc::channel(100);
+        let (tx, mut rx) = unbounded();
 
         if self.authentication.is_none() {
             return Err(Error::new_network("Client is not authenticated"));
@@ -127,7 +128,7 @@ impl DataStreamConnection {
                     match socket.read(buf.as_mut()).await {
                         Ok(n) if n == 0 => (),
                         Ok(n) => {
-                            tx.send(buf.freeze()).await;
+                            tx.send(buf.freeze());
                         }
                         Err(e) => {
                             eprintln!("Error while reading socket");
@@ -150,8 +151,7 @@ impl DataStreamConnection {
     /// # Returns
     /// A stream, which wraps the sender part of a channel in an asynchronous fashion.
     pub async fn spawn_writer(&mut self) -> Result<DataStreamWriter, Error> {
-        let (tx, mut rx): (mpsc::UnboundedSender<Bytes>, mpsc::UnboundedReceiver<Bytes>) =
-            mpsc::unbounded_channel();
+        let (tx, mut rx): (Sender<Bytes>, Receiver<Bytes>) = unbounded();
 
         if self.authentication.is_none() {
             return Err(Error::new_network("Client is not authenticated"));
@@ -160,8 +160,8 @@ impl DataStreamConnection {
         if let Some(mut writer) = self.writer.take() {
             tokio::spawn(async move {
                 loop {
-                    match rx.recv().await {
-                        Some(bytes) => {
+                    match rx.recv() {
+                        Ok(bytes) => {
                             debug!("Received data to be transmitted");
                             let write_res = writer.write_all(bytes.as_ref()).await;
                             writer.flush().await;
@@ -170,7 +170,9 @@ impl DataStreamConnection {
                                 error!("Error writing data: {}", e.to_string());
                             }
                         }
-                        None => {}
+                        Err(e) => {
+                            error!("Error receiving writable data: {}", e.to_string());
+                        }
                     };
                 }
             });

@@ -1,27 +1,46 @@
 use crate::error::error::Error;
 use crate::net::data::IntermediateGameData;
-use bytes::Bytes;
-use std::future::Future;
-use tokio::sync::mpsc;
+use crate::net::protocol::decode::ByteToRawDecoder;
 use crate::net::protocol::encode::BBEncodable;
+use bytes::{Bytes, BytesMut};
+use crossbeam_channel::{Receiver, RecvError, SendError, Sender};
+use std::future::Future;
 
-type Rec = mpsc::Receiver<Bytes>;
-type Send = mpsc::UnboundedSender<Bytes>;
+type Rec = Receiver<Bytes>;
+type Send = Sender<Bytes>;
 type InternalMsg = Bytes;
 
 pub struct DataStreamReader {
     receiver: Rec,
+    decoder: ByteToRawDecoder,
 }
 
 impl DataStreamReader {
     pub fn new(receiver: Rec) -> Self {
-        DataStreamReader { receiver }
+        DataStreamReader {
+            receiver,
+            decoder: ByteToRawDecoder::new(),
+        }
     }
 }
 
 impl DataStreamReader {
-    pub fn recv(&mut self) -> impl Future<Output = Option<InternalMsg>> + '_ {
-        self.receiver.recv()
+    pub fn recv(&mut self) -> Result<IntermediateGameData, Error> {
+        let bytes = BytesMut::from(
+            self.receiver
+                .recv()
+                .map_err(|e| Error::new_network(&e.to_string()))?.as_ref(),
+        );
+        self.decoder.convert(&bytes)
+    }
+
+    pub fn try_recv(&mut self) -> Result<IntermediateGameData, Error> {
+        let bytes = BytesMut::from(
+            self.receiver
+                .try_recv()
+                .map_err(|e| Error::new_network(&e.to_string()))?.as_ref(),
+        );
+        self.decoder.convert(&bytes)
     }
 }
 
@@ -36,10 +55,7 @@ impl DataStreamWriter {
 }
 
 impl DataStreamWriter {
-    pub fn send(
-        &mut self,
-        data: Bytes,
-    ) -> Result<(), mpsc::error::SendError<Bytes>> {
+    pub fn send(&mut self, data: Bytes) -> Result<(), SendError<Bytes>> {
         self.sender.send(data)
     }
 }

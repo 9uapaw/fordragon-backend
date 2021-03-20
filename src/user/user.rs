@@ -5,8 +5,8 @@ use std::fmt::{Display, Formatter};
 pub struct AuthenticatedUser {
     pub addr: SocketAddr,
     pub name: String,
-    reader: Option<DataStreamReader>,
-    writer: Option<DataStreamWriter>,
+    pub reader: Option<DataStreamReader>,
+    pub writer: Option<DataStreamWriter>,
 }
 
 impl AuthenticatedUser {

@@ -11,17 +11,16 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::prelude::*;
+use crossbeam_channel::unbounded;
 
 pub struct TcpServer {
     address: SocketAddr,
-    game_loop: Arc<Mutex<Lobby>>,
 }
 
 impl TcpServer {
     pub fn new(address: SocketAddr) -> Self {
         TcpServer {
             address,
-            game_loop: Arc::new(Mutex::new(Lobby::new())),
         }
     }
 
@@ -30,16 +29,21 @@ impl TcpServer {
             Error::new_network(&format!("Unable to start server {}", e.to_string()))
         })?;
         let session_manager = Arc::new(Mutex::new(DefaultSessionManager::new()));
-        self.game_loop.lock().unwrap().start();
+        let (new_user_send, new_user_recv) = unbounded();
+
+        tokio::spawn(async move {
+            let mut lobby = Lobby::new(new_user_recv);
+            lobby.start();
+        });
 
         loop {
+            let new_user_send = new_user_send.clone();
             let (mut socket, addr) = client.accept().await.map_err(|e| {
                 Error::new_network(&format!(
                     "Unable to accept incoming connection {}",
                     e.to_string()
                 ))
             })?;
-            let game = self.game_loop.clone();
 
             // Disable Natle algorithm
             socket.set_nodelay(true);
@@ -84,9 +88,7 @@ impl TcpServer {
                         }
                         let user =
                             AuthenticatedUser::new(addr, user_name, Some(reader), Some(writer));
-                        if let Ok(mut game) = game.lock() {
-                            game.enter_user(user);
-                        }
+                        new_user_send.send(user);
                     }
                 }
             });

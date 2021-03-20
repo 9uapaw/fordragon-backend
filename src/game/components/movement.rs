@@ -1,6 +1,20 @@
 use crate::game::location::facing::Facing;
 use crate::game::location::pos::Position;
 use std::time::{Instant, Duration};
+use specs::{Component, VecStorage};
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct Location {
+    pub position: Position
+}
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct Transformation {
+    pub facing: Facing,
+    pub speed: f32
+}
 
 pub struct MovementComponent {
     pub facing: Facing,
@@ -16,22 +30,6 @@ impl MovementComponent {
             speed,
         }
     }
-
-    // pub fn move_forward(&mut self, delta: Duration) {
-    //     let speed = self.speed;
-    //     let angle = self.facing.get_facing();
-    //     let calculated_speed = speed * delta.as_secs() as f32;
-    //
-    //     let vx = calculated_speed * angle.cos();
-    //     let vy = calculated_speed * angle.sin();
-    //
-    //     let new_position = Position::from_coord(
-    //         self.position().x() + vx as f64,
-    //         self.position().y() + vy as f64,
-    //     );
-    //
-    //     self.position = new_position;
-    // }
 }
 
 impl Default for MovementComponent {

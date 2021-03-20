@@ -1,3 +1,4 @@
+use num_enum::TryFromPrimitive;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 
 /// The intermediate representation of a BBP message.
@@ -5,6 +6,7 @@ use crate::net::protocol::opcode::NetworkRecvOpCode;
 pub enum IntermediateGameData {
     Auth { user: String, hash: String },
     Flag { op_code: NetworkRecvOpCode },
+    PlayerInput {user: String, action: PlayerInputAction}
 }
 
 impl Default for IntermediateGameData {
@@ -13,4 +15,11 @@ impl Default for IntermediateGameData {
             op_code: NetworkRecvOpCode::UNKNOWN,
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive)]
+#[repr(u8)]
+pub enum PlayerInputAction {
+    MoveForward,
+    StopMove
 }

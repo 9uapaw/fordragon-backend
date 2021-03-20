@@ -14,7 +14,6 @@ use tokio::sync::mpsc;
 pub struct PlayerCharacter {
     pub name: String,
     pub user: AuthenticatedUser,
-    pub state: StateMachineComponent<StateDelta>,
     pub movement: MovementComponent,
     update: Instant,
     observers: HashMap<String, mpsc::UnboundedSender<StateDelta>>,
@@ -25,7 +24,6 @@ impl PlayerCharacter {
         PlayerCharacter {
             name,
             user,
-            state: StateMachineComponent::new(),
             movement: MovementComponent::default(),
             update: Instant::now(),
             observers: HashMap::new(),

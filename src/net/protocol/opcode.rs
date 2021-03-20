@@ -9,6 +9,7 @@ use std::convert::TryFrom;
 pub enum NetworkRecvOpCode {
     UNKNOWN,
     AUTH,
+    MOVEMENT
 }
 
 impl Default for NetworkRecvOpCode {

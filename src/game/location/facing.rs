@@ -2,7 +2,7 @@ use euclid::{Angle, UnknownUnit};
 
 const MAX_FACING: f32 = std::f32::consts::PI;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Facing {
     angle: Angle<f32>,
 }
