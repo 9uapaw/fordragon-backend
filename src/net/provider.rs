@@ -1,5 +1,5 @@
 use crate::error::error::Error;
-use crate::net::data::IntermediateGameData;
+use crate::net::data::IntermediateGamePacket;
 use crate::net::protocol::decode::ByteToRawDecoder;
 use crate::net::protocol::encode::BBEncodable;
 use bytes::{Bytes, BytesMut};
@@ -25,7 +25,7 @@ impl DataStreamReader {
 }
 
 impl DataStreamReader {
-    pub fn recv(&mut self) -> Result<IntermediateGameData, Error> {
+    pub fn recv(&mut self) -> Result<IntermediateGamePacket, Error> {
         let bytes = BytesMut::from(
             self.receiver
                 .recv()
@@ -34,7 +34,7 @@ impl DataStreamReader {
         self.decoder.convert(&bytes)
     }
 
-    pub fn try_recv(&mut self) -> Result<IntermediateGameData, Error> {
+    pub fn try_recv(&mut self) -> Result<IntermediateGamePacket, Error> {
         let bytes = BytesMut::from(
             self.receiver
                 .try_recv()

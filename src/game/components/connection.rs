@@ -1,8 +1,5 @@
 use crate::user::user::AuthenticatedUser;
-use specs::{Component, VecStorage};
 
-#[derive(Component)]
-#[storage(VecStorage)]
 pub struct NetworkConnectionComponent {
     pub user: AuthenticatedUser
 }

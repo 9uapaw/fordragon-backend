@@ -5,7 +5,6 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::slice::{Iter, IterMut};
 use std::sync::atomic::AtomicPtr;
-use crate::game::object::obj::GameObject;
 
 #[derive(Debug)]
 pub struct QuadNode<T>
@@ -175,15 +174,15 @@ where
         }
     }
 
-    pub fn remove(&mut self, k: &str) {
-        let mut removed = false;
+    pub fn remove(&mut self, k: &str) -> Option<T> {
+        let mut res = None;
         if let Some(n) = self.find_node_of_value(k) {
-            n.values.remove(k);
-            removed = true;
+            res = n.values.remove(k);
         }
-        if removed {
+        if res.is_some() {
             self.object_node_map.remove(k);
         }
+        res
     }
 
     pub fn find_node_of_value(&mut self, k: &str) -> Option<&mut QuadNode<T>> {
@@ -191,6 +190,24 @@ where
             self.arena.get_mut(*node_index)
         } else {
             None
+        }
+    }
+
+    pub fn update_position(&mut self, k: &str, new_pos: Position) {
+        if let Some(node_index) = self.object_node_map.get(k) {
+            if let Some(node) = self.arena.get_mut(*node_index) {
+                if node.area.contains(new_pos) {
+                    if let Some(value) = node.values.get_mut(k) {
+                        value.set_position(new_pos);
+                    }
+                } else {
+                    let mut val = self.remove(k);
+                    if let Some(mut val) = val.take() {
+                        val.set_position(new_pos);
+                        self.add(k.to_string(), val);
+                    }
+                }
+            }
         }
     }
 

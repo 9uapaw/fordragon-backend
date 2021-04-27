@@ -94,7 +94,7 @@ mod tests {
     use crate::net::protocol::cursor::{ByteCursor};
     use bytes::BytesMut;
     use crate::net::protocol::opcode::NetworkRecvOpCode;
-    use crate::net::data::IntermediateGameData;
+    use crate::net::data::IntermediateGamePacket;
 
     #[test]
     fn test_u16() {

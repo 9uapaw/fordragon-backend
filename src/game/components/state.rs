@@ -1,8 +1,7 @@
 use crate::game::components::movement::{Location, Transformation};
 use crate::game::location::pos::Position;
-use crate::game::object::obj::StateDelta;
 use crate::net::data::PlayerInputAction;
-use specs::{Component, VecStorage};
+use crate::net::packet::state_delta::{ObjectStateBatch, ObjectStateChange};
 use std::sync::atomic::AtomicPtr;
 use std::time::Duration;
 
@@ -15,6 +14,7 @@ pub struct MovableStateData {
     pub location: AtomicPtr<Location>,
     pub delta: Duration,
     pub action: Option<PlayerInputAction>,
+    pub state_delta: Option<ObjectStateBatch>,
 }
 
 impl<'a> MovableStateData {
@@ -29,6 +29,7 @@ impl<'a> MovableStateData {
             location: location.map_or(AtomicPtr::default(), |l| AtomicPtr::new(l)),
             delta,
             action,
+            state_delta: Some(ObjectStateBatch::new()),
         }
     }
 }
@@ -44,7 +45,12 @@ struct IdleState;
 impl State<MovableStateData> for IdleState {
     fn update(&mut self, data: &mut MovableStateData) -> Option<BoxedState<MovableStateData>> {
         match data.action {
-            Some(PlayerInputAction::MoveForward) => Some(Box::new(MoveState {})),
+            Some(PlayerInputAction::MoveForward) => {
+                unsafe {
+                    let mut transformation = &mut (*(*data.transformation.get_mut()));
+                    data.state_delta.as_mut().unwrap().add(ObjectStateChange::Speed(transformation.speed));
+                }
+                Some(Box::new(MoveState {})) },
             _ => None,
         }
     }
@@ -64,7 +70,10 @@ impl State<MovableStateData> for MoveState {
     fn update(&mut self, data: &mut MovableStateData) -> Option<BoxedState<MovableStateData>> {
         info!("Move state update");
         match data.action {
-            Some(PlayerInputAction::StopMove) => return Some(Box::new(IdleState)),
+            Some(PlayerInputAction::StopMove) => {
+                data.state_delta.as_mut().unwrap().add(ObjectStateChange::Speed(0.0));
+                return Some(Box::new(IdleState));
+            }
             _ => (),
         };
         unsafe {
@@ -83,25 +92,23 @@ impl State<MovableStateData> for MoveState {
                 location.position.y() + vy as f64,
             );
 
-            debug!("Changing position to: {:#?}", &new_position);
-
+            debug!("Position update to {:#?}", &new_position);
             location.position = new_position;
+            data.state_delta.as_mut().unwrap().add(ObjectStateChange::Position(new_position));
         }
 
         None
     }
 
     fn on_start(&mut self) {
-        println!("STARTED MOVE");
+        info!("STARTED MOVE");
     }
 
     fn on_stop(&mut self) {
-        println!("STOPPED MOVE");
+        info!("STOPPED MOVE");
     }
 }
 
-#[derive(Component)]
-#[storage(VecStorage)]
 pub struct StateMachineComponent<T>
 where
     T: 'static,

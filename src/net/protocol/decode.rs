@@ -1,5 +1,5 @@
 use crate::error::error::Error;
-use crate::net::data::{IntermediateGameData, PlayerInputAction};
+use crate::net::data::{IntermediateGamePacket, PlayerInputAction};
 use crate::net::protocol::cursor::ByteCursor;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 use bytes::BytesMut;
@@ -18,9 +18,8 @@ impl ByteToRawDecoder {
     ///
     /// The bytes are interpreted in a little endian fashion as the following:
     /// 0-2 bytes: NetworkOpCode (u16)
-    pub fn convert(&self, buf: &BytesMut) -> Result<IntermediateGameData, Error> {
+    pub fn convert(&self, buf: &BytesMut) -> Result<IntermediateGamePacket, Error> {
         let mut cursor = ByteCursor::new(buf);
-        let mut data = IntermediateGameData::default();
 
         let op_code = match cursor.as_u16() {
             Some(op) => Some(
@@ -43,7 +42,7 @@ impl ByteToRawDecoder {
         &self,
         cursor: &mut ByteCursor,
         op_code: &NetworkRecvOpCode,
-    ) -> Result<IntermediateGameData, Error> {
+    ) -> Result<IntermediateGamePacket, Error> {
         match op_code {
             NetworkRecvOpCode::AUTH => convert_auth(cursor),
             NetworkRecvOpCode::MOVEMENT => convert_movement(cursor),
@@ -53,25 +52,25 @@ impl ByteToRawDecoder {
 }
 
 #[inline]
-fn convert_auth(cursor: &mut ByteCursor) -> Result<IntermediateGameData, Error> {
+fn convert_auth(cursor: &mut ByteCursor) -> Result<IntermediateGamePacket, Error> {
     let user = cursor
         .as_utf8()
         .ok_or(Error::new_network("Invalid or missing username from AUTH"))?;
     let hash = cursor
         .as_utf8()
         .ok_or(Error::new_network("Invalid or missing hash from AUTH"))?;
-    Ok(IntermediateGameData::Auth { user, hash })
+    Ok(IntermediateGamePacket::Auth { user, hash })
 }
 
 #[inline]
-fn convert_movement(cursor: &mut ByteCursor) -> Result<IntermediateGameData, Error> {
+fn convert_movement(cursor: &mut ByteCursor) -> Result<IntermediateGamePacket, Error> {
     let user = cursor.as_utf8().ok_or(Error::new_network(
         "Invalid or missing username from InputPacket",
     ))?;
     let action = cursor.as_u8().ok_or(Error::new_network(
         "Invalid or missing action type from InputPacket",
     ))?;
-    Ok(IntermediateGameData::PlayerInput {
+    Ok(IntermediateGamePacket::PlayerInput {
         user,
         action: PlayerInputAction::try_from(action)
             .map_err(|e| Error::NetworkError(e.to_string()))?,
@@ -80,7 +79,7 @@ fn convert_movement(cursor: &mut ByteCursor) -> Result<IntermediateGameData, Err
 
 #[cfg(test)]
 mod tests {
-    use crate::net::data::IntermediateGameData;
+    use crate::net::data::IntermediateGamePacket;
     use crate::net::protocol::cursor::ByteCursor;
     use crate::net::protocol::decode::ByteToRawDecoder;
     use crate::net::protocol::encode::ByteEncoder;
@@ -100,7 +99,7 @@ mod tests {
 
         if let Ok(raw) = raw {
             match raw {
-                IntermediateGameData::Auth { user, hash } => {
+                IntermediateGamePacket::Auth { user, hash } => {
                     assert_eq!(user, "test_user");
                     assert_eq!(hash, "hash12345");
                 }

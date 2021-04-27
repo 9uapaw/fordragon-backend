@@ -32,6 +32,7 @@ impl BBEncodable for NetworkRecvOpCode {
 pub enum NetworkSendOpCode {
     UNKNOWN,
     AUTH,
+    SPAWN,
 }
 
 impl BBEncodable for NetworkSendOpCode {

@@ -1,16 +1,13 @@
 use crate::game::location::facing::Facing;
 use crate::game::location::pos::Position;
 use std::time::{Instant, Duration};
-use specs::{Component, VecStorage};
 
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
+#[derive(Debug)]
 pub struct Location {
     pub position: Position
 }
 
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
+#[derive(Debug)]
 pub struct Transformation {
     pub facing: Facing,
     pub speed: f32

@@ -1,9 +1,35 @@
 use euclid::{point2, vec2, Box2D, Point2D, Rect, Vector2D};
+use legion::Entity;
+use crate::net::protocol::encode::BBEncodable;
+use bytes::{BytesMut, BufMut};
+use crate::common::obj_id::GameObjectIdentifier;
 
 struct Unit {}
 
 pub trait Positionable {
     fn position(&self) -> Position;
+    fn set_position(&mut self, new_position: Position);
+}
+
+pub struct LocatableGameObject {
+    pub id: GameObjectIdentifier,
+    position: Position,
+}
+
+impl LocatableGameObject {
+    pub fn new(id: GameObjectIdentifier, position: Position) -> Self {
+        LocatableGameObject { id, position }
+    }
+}
+
+impl Positionable for LocatableGameObject {
+    fn position(&self) -> Position {
+        self.position
+    }
+
+    fn set_position(&mut self, new_position: Position) {
+        self.position = new_position;
+    }
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -32,6 +58,13 @@ impl Position {
     #[inline]
     pub fn y(&self) -> f64 {
         self.internal.y
+    }
+}
+
+impl BBEncodable for Position {
+    fn encode_as_bbp(&self, buf: &mut BytesMut) {
+       buf.put_f64_le(self.internal.x);
+        buf.put_f64_le(self.internal.y);
     }
 }
 

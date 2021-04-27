@@ -88,6 +88,7 @@ impl TcpServer {
                         }
                         let user =
                             AuthenticatedUser::new(addr, user_name, Some(reader), Some(writer));
+                        debug!("Sent new user {} to lobby", &user);
                         new_user_send.send(user);
                     }
                 }

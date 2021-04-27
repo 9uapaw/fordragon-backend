@@ -30,6 +30,10 @@ impl<'a> ByteEncoder<'a> {
         self.buf.put_u32_le(v);
     }
 
+    pub fn encode_u8(&mut self, v: u8) {
+        self.buf.put_u8(v);
+    }
+
     pub fn encode<T: BBEncodable>(&mut self, c: &T) {
         c.encode_as_bbp(self.buf);
     }

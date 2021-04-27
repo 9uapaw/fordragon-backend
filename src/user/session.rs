@@ -15,6 +15,7 @@ impl DefaultSessionManager {
     pub fn new() -> Self {
         let mut temp_storage = HashMap::new();
         temp_storage.insert("admin".to_string(), format!("admin:admin:{}", TEMP_SECRET));
+        temp_storage.insert("test".to_string(), format!("test:test:{}", TEMP_SECRET));
         DefaultSessionManager {
             temp_storage,
         }

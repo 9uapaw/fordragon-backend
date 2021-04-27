@@ -1,17 +1,17 @@
 use num_enum::TryFromPrimitive;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 
-/// The intermediate representation of a BBP message.
+/// The intermediate representation of a BBP C2S message.
 #[derive(Debug)]
-pub enum IntermediateGameData {
+pub enum IntermediateGamePacket {
     Auth { user: String, hash: String },
     Flag { op_code: NetworkRecvOpCode },
     PlayerInput {user: String, action: PlayerInputAction}
 }
 
-impl Default for IntermediateGameData {
+impl Default for IntermediateGamePacket {
     fn default() -> Self {
-        IntermediateGameData::Flag {
+        IntermediateGamePacket::Flag {
             op_code: NetworkRecvOpCode::UNKNOWN,
         }
     }

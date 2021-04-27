@@ -3,7 +3,6 @@ use crate::game::location::facing::Facing;
 use std::time::Instant;
 
 pub trait Transformable: Positionable {
-    fn set_position(&mut self, new_position: Position);
     fn get_facing(&self) -> Facing;
 }
 

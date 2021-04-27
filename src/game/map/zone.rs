@@ -1,15 +1,16 @@
 use crate::common::quad_tree::QuadTree;
-use crate::game::location::pos::{Area, Position};
-use crate::game::object::obj::GameObject;
+use crate::game::location::pos::{Area, LocatableGameObject, Position};
+use legion::Entity;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 
 pub struct Zone {
     id: String,
-    grid: QuadTree<GameObject>,
+    pub grid: QuadTree<LocatableGameObject>,
 }
 
 impl Zone {
-    pub fn new(id: String, grid: QuadTree<GameObject>) -> Self {
+    pub fn new(id: String, grid: QuadTree<LocatableGameObject>) -> Self {
         Zone { id, grid }
     }
 }
@@ -25,5 +26,14 @@ impl Default for Zone {
                 4,
             ),
         }
+    }
+}
+
+impl Zone {
+    pub fn get_neighbors_of(
+        &mut self,
+        id: String,
+    ) -> Option<&mut HashMap<String, LocatableGameObject>> {
+        self.grid.find_node_of_value(&id).map(|n| n.get_values())
     }
 }

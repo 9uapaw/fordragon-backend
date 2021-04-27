@@ -1,10 +1,12 @@
 use crate::error::error::{AuthError, Error};
-use crate::net::data::IntermediateGameData;
+use crate::net::data::IntermediateGamePacket;
 use crate::net::protocol::decode::ByteToRawDecoder;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 use crate::net::provider::{DataStreamReader, DataStreamWriter};
 use crate::user::session::UserSessionManager;
 use bytes::{Bytes, BytesMut};
+use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::process::Output;
@@ -12,8 +14,6 @@ use std::sync::{Arc, Mutex};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
-use crossbeam_channel::unbounded;
-use crossbeam_channel::{Receiver, Sender};
 
 const BUFFER_LIMIT: usize = 1400;
 
@@ -68,7 +68,7 @@ impl DataStreamConnection {
 
             return match auth {
                 Ok(auth) => match auth {
-                    IntermediateGameData::Auth { user, hash } => {
+                    IntermediateGamePacket::Auth { user, hash } => {
                         let manager = session_manager.lock();
                         if !manager.is_ok() {
                             return Err(AuthError::invalid_user_or_password());
@@ -97,9 +97,10 @@ impl DataStreamConnection {
                 },
                 Err(e) => {
                     debug!("{}", e.to_string());
-                    Err(Error::NetworkError(
-                        format!("Authentication failed due to conversion error - {}", e.to_string())
-                    ))
+                    Err(Error::NetworkError(format!(
+                        "Authentication failed due to conversion error - {}",
+                        e.to_string()
+                    )))
                 }
             };
         } else {
@@ -122,13 +123,13 @@ impl DataStreamConnection {
 
         if let Some(mut socket) = self.reader.take() {
             tokio::spawn(async move {
-
                 loop {
-                    let mut buf = BytesMut::with_capacity(BUFFER_LIMIT);
+                    let mut buf = [0 as u8; BUFFER_LIMIT];
                     match socket.read(buf.as_mut()).await {
                         Ok(n) if n == 0 => (),
                         Ok(n) => {
-                            tx.send(buf.freeze());
+                            debug!("Received data {}", n);
+                            tx.send(Bytes::copy_from_slice(&buf));
                         }
                         Err(e) => {
                             eprintln!("Error while reading socket");
@@ -171,7 +172,7 @@ impl DataStreamConnection {
                             }
                         }
                         Err(e) => {
-                            error!("Error receiving writable data: {}", e.to_string());
+                            // error!("Error receiving writable data: {}", e.to_string());
                         }
                     };
                 }
@@ -193,11 +194,11 @@ mod tests {
     use crate::net::protocol::opcode::NetworkRecvOpCode;
     use crate::user::session::UserSessionManager;
     use bytes::{Buf, Bytes, BytesMut};
+    use env_logger::Env;
     use std::sync::{Arc, Mutex};
     use tokio::net::TcpListener;
     use tokio::net::TcpStream;
     use tokio::prelude::*;
-    use env_logger::Env;
 
     #[tokio::test]
     async fn test_bidirectional_messaging() {
@@ -238,10 +239,7 @@ mod tests {
             }
             if !buf.is_empty() {
                 println!("buff");
-                let res = tcp_stream
-                    .write(buf.as_ref())
-                    .await
-                    .expect("Error sending");
+                let res = tcp_stream.write(buf.as_ref()).await.expect("Error sending");
                 tcp_stream.flush().await;
             }
         });
