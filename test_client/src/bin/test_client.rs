@@ -1,7 +1,8 @@
 use bytes::BytesMut;
-use fordragon_backend::net::protocol::encode::{BBEncodable, ByteEncoder};
-use fordragon_backend::net::protocol::opcode::NetworkRecvOpCode;
-use fordragon_backend::user::session::DefaultSessionManager;
+use server::net::protocol::cursor::ByteCursor;
+use server::net::protocol::encode::{BBEncodable, ByteEncoder};
+use server::net::protocol::opcode::{NetworkRecvOpCode, NetworkSendOpCode};
+use server::user::session::DefaultSessionManager;
 use sha2::Digest;
 use std::convert::TryFrom;
 use std::io::{stdin, BufRead, BufReader};
@@ -55,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if *a == 0 {
                             zero_counter += 1;
                         }
-                        if zero_counter == 5 {
+                        if zero_counter == 10 {
                             break;
                         }
                         truncate_index += 1;
@@ -64,6 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "Message received: {:?}",
                         BytesMut::from(&buf[0..truncate_index])
                     );
+                    print_incoming_msg(&buf);
                 }
                 Err(e) => {
                     eprintln!("Error while reading socket");
@@ -157,4 +159,29 @@ fn shortcuts(line: &str, encoder: &mut ByteEncoder, stored: &mut Vec<String>) ->
         }
         _ => false,
     }
+}
+
+fn print_incoming_msg(msg: &[u8]) {
+    let mut bytes = BytesMut::from(msg.as_ref());
+    let mut cursor = ByteCursor::new(&bytes);
+    let op = cursor.as_u16().expect("No OP");
+    println!("{}", op);
+    let op = NetworkSendOpCode::try_from(op).expect("Convert OP error");
+    println!("{:#?}", op);
+    match op {
+        NetworkSendOpCode::PLAYER_STATE_CHANGE => {
+            let player = cursor.as_utf8().expect("No player");
+            print!("Player '{}' -> ", player);
+            cursor.as_u32();
+            let sub_op = cursor.as_u8().expect("No STATE CHANGE sub OP");
+            match sub_op {
+                0 => println!("Position change"),
+                1 => println!("Speed change"),
+                2 => println!("Spawn"),
+                3 => println!("Disconnected"),
+                _ => (),
+            };
+        }
+        _ => (),
+    };
 }

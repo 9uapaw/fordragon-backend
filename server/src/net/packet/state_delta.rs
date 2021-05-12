@@ -4,10 +4,17 @@ use crate::net::packet::spawn::SpawnPacket;
 use crate::common::obj_id::GameObjectIdentifier;
 use crate::net::protocol::encode::{BBEncodable, ByteEncoder};
 use bytes::{BytesMut, BufMut};
+use std::fmt::{Formatter, Display};
 
 pub struct ObjectStateDeltaPacket {
     pub id: GameObjectIdentifier,
     pub delta_batch: ObjectStateBatch
+}
+
+impl Display for ObjectStateDeltaPacket {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {:#?}", &self.id, self.delta_batch)
+    }
 }
 
 impl ObjectStateDeltaPacket {
@@ -24,6 +31,7 @@ impl BBEncodable for ObjectStateDeltaPacket {
     }
 }
 
+#[derive(Debug)]
 pub struct ObjectStateBatch {
     pub batch: Vec<ObjectStateChange>
 }
@@ -49,10 +57,12 @@ impl BBEncodable for ObjectStateBatch {
     }
 }
 
+#[derive(Debug)]
 pub enum ObjectStateChange {
     Position(Position),
     Speed(f32),
-    Spawn(SpawnPacket)
+    Spawn(SpawnPacket),
+    DeSpawn,
 }
 
 impl BBEncodable for ObjectStateChange {
@@ -69,6 +79,9 @@ impl BBEncodable for ObjectStateChange {
             ObjectStateChange::Spawn(sp) => {
                 buf.put_u8(2);
                 sp.encode_as_bbp(buf);
+            },
+            ObjectStateChange::DeSpawn => {
+                buf.put_u8(3);
             }
         }
     }

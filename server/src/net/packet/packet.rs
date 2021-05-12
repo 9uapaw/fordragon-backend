@@ -2,27 +2,28 @@ use crate::error::error::Error;
 use crate::net::protocol::encode::BBEncodable;
 use crate::net::protocol::opcode::NetworkSendOpCode;
 use bytes::{BufMut, Bytes, BytesMut};
+use std::fmt::Debug;
 
-pub struct S2CPacket<T> {
+pub struct S2CPacket<'a, T> {
     opcode: NetworkSendOpCode,
-    data: Option<T>,
+    data: Option<&'a T>,
 }
 
-pub struct S2CPacketBuilder<T: BBEncodable> {
+pub struct S2CPacketBuilder<'a, T: BBEncodable> {
     opcode: Option<NetworkSendOpCode>,
-    data: Option<T>,
+    data: Option<&'a T>,
 }
 
-impl<T: BBEncodable> BBEncodable for S2CPacket<T> {
+impl<'a, T: BBEncodable> BBEncodable for S2CPacket<'a, T> {
     fn encode_as_bbp(&self, buf: &mut BytesMut) {
-        buf.put_u8(self.opcode as u8);
+        self.opcode.encode_as_bbp(buf);
         if let Some(data) = &self.data {
             data.encode_as_bbp(buf);
         }
     }
 }
 
-impl<T: BBEncodable> S2CPacketBuilder<T> {
+impl<'a, T: BBEncodable> S2CPacketBuilder<'a, T> {
     pub fn new() -> Self {
         S2CPacketBuilder {
             opcode: None,
@@ -35,12 +36,12 @@ impl<T: BBEncodable> S2CPacketBuilder<T> {
         self
     }
 
-    pub fn data(&mut self, data: T) -> &mut Self {
+    pub fn data(&mut self, data: &'a T) -> &mut Self {
         self.data.replace(data);
         self
     }
 
-    pub fn build(&mut self) -> Result<S2CPacket<T>, Error> {
+    pub fn build(&mut self) -> Result<S2CPacket<'a, T>, Error> {
         Ok(S2CPacket {
             opcode: self
                 .opcode

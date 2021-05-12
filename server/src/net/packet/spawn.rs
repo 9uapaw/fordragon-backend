@@ -2,14 +2,14 @@ use crate::game::location::pos::Position;
 use crate::net::protocol::encode::{BBEncodable, ByteEncoder};
 use bytes::BytesMut;
 
+#[derive(Debug)]
 pub struct SpawnPacket {
-    obj_id: String,
     location: Position
 }
 
 impl SpawnPacket {
-    pub fn new(obj_id: String, location: Position) -> Self {
-        SpawnPacket { obj_id, location }
+    pub fn new(location: Position) -> Self {
+        SpawnPacket { location }
     }
 }
 

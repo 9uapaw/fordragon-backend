@@ -1,8 +1,8 @@
 use env_logger::Env;
-use fordragon_backend::error::error::Error;
-use fordragon_backend::net::connection::DataStreamConnection;
-use fordragon_backend::net::server::TcpServer;
-use fordragon_backend::user::session::DefaultSessionManager;
+use server::error::error::Error;
+use server::net::connection::DataStreamConnection;
+use server::net::server::TcpServer;
+use server::user::session::DefaultSessionManager;
 use log::{error, info, warn};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};

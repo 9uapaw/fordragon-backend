@@ -1,4 +1,4 @@
 pub mod frame;
-pub mod new_user;
+pub mod user_manager;
 pub mod state_delta;
 pub mod zones;

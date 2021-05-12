@@ -8,6 +8,8 @@ use bytes::BytesMut;
 use legion::world::SubWorld;
 use legion::{system, EntityStore, Resources, World};
 use std::sync::atomic::AtomicPtr;
+use crate::net::packet::packet::S2CPacketBuilder;
+use crate::net::protocol::opcode::NetworkSendOpCode;
 
 pub fn network_stream(mut world: AtomicPtr<World>, mut resources: AtomicPtr<Resources>) {
     unsafe {
@@ -20,7 +22,7 @@ pub fn network_stream(mut world: AtomicPtr<World>, mut resources: AtomicPtr<Reso
         ) {
             for delta in state_delta.0.drain(0..) {
                 let mut neighbours = None;
-                if let Ok(mut entity) = world.entry_mut(delta.id.internal) {
+                if let Ok(mut entity) = world.entry_mut(delta.id.internal.clone()) {
                     if let Ok(obj) = entity.get_component::<GameObjectDescriptor>() {
                         if let Some(zone) = zones.zones.get_mut(&obj.zone_id) {
                             neighbours = zone
@@ -36,10 +38,11 @@ pub fn network_stream(mut world: AtomicPtr<World>, mut resources: AtomicPtr<Reso
                                 entity.get_component_mut::<NetworkConnectionComponent>()
                             {
                                 if let Some(writer) = &mut network_connection.user.writer {
-                                    let mut buf = BytesMut::new();
-                                    delta.encode_as_bbp(&mut buf);
-                                    debug!("{:#?}", &mut buf);
-                                    writer.send(buf.freeze());
+                                    if let Ok (packet) = S2CPacketBuilder::new().op_code(NetworkSendOpCode::PLAYER_STATE_CHANGE).data(&delta).build() {
+                                        let mut buf = BytesMut::new();
+                                        packet.encode_as_bbp(&mut buf);
+                                        writer.send(buf.freeze());
+                                    }
                                 }
                             }
                         }

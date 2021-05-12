@@ -309,6 +309,10 @@ mod tests {
         fn position(&self) -> Position {
             Position::from_coord(self.x, self.y)
         }
+
+        fn set_position(&mut self, new_position: Position) {
+            todo!()
+        }
     }
 
     #[test]

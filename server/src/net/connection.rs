@@ -4,6 +4,7 @@ use crate::net::protocol::decode::ByteToRawDecoder;
 use crate::net::protocol::opcode::NetworkRecvOpCode;
 use crate::net::provider::{DataStreamReader, DataStreamWriter};
 use crate::user::session::UserSessionManager;
+use crate::user::user_event::UserChangeEvent;
 use bytes::{Bytes, BytesMut};
 use crossbeam_channel::unbounded;
 use crossbeam_channel::{Receiver, Sender};
@@ -151,12 +152,17 @@ impl DataStreamConnection {
     ///
     /// # Returns
     /// A stream, which wraps the sender part of a channel in an asynchronous fashion.
-    pub async fn spawn_writer(&mut self) -> Result<DataStreamWriter, Error> {
+    pub async fn spawn_writer(
+        &mut self,
+        user_change: Sender<UserChangeEvent>,
+    ) -> Result<DataStreamWriter, Error> {
         let (tx, mut rx): (Sender<Bytes>, Receiver<Bytes>) = unbounded();
 
         if self.authentication.is_none() {
             return Err(Error::new_network("Client is not authenticated"));
         }
+
+        let addr = self.address.clone();
 
         if let Some(mut writer) = self.writer.take() {
             tokio::spawn(async move {
@@ -169,6 +175,7 @@ impl DataStreamConnection {
                             debug!("Sent data to {:?}", writer);
                             if let Err(e) = write_res {
                                 error!("Error writing data: {}", e.to_string());
+                                user_change.send(UserChangeEvent::DisconnectedUser(addr));
                             }
                         }
                         Err(e) => {

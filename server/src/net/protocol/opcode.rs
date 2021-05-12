@@ -1,5 +1,5 @@
 use crate::net::protocol::encode::BBEncodable;
-use bytes::{Bytes, BytesMut};
+use bytes::{Bytes, BytesMut, BufMut};
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
 
@@ -20,8 +20,7 @@ impl Default for NetworkRecvOpCode {
 
 impl BBEncodable for NetworkRecvOpCode {
     fn encode_as_bbp(&self, buf: &mut BytesMut) {
-        let bytes = (*self as u16).to_le_bytes();
-        buf.extend(bytes.iter());
+        buf.put_u16_le(*self as u16);
     }
 }
 
@@ -32,12 +31,11 @@ impl BBEncodable for NetworkRecvOpCode {
 pub enum NetworkSendOpCode {
     UNKNOWN,
     AUTH,
-    SPAWN,
+    PLAYER_STATE_CHANGE,
 }
 
 impl BBEncodable for NetworkSendOpCode {
     fn encode_as_bbp(&self, buf: &mut BytesMut) {
-        let bytes = (*self as u16).to_le_bytes();
-        buf.extend(bytes.iter());
+        buf.put_u16_le(*self as u16)
     }
 }
